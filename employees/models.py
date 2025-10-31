@@ -29,7 +29,8 @@ class Employee(models.Model):
     designation = models.CharField(max_length=120, blank=True)
     phone       = models.CharField(max_length=20, blank=True)
     email       = models.EmailField(unique=True)
-    region      = models.CharField(max_length=100, blank=True)   # ✅ added region field
+    region      = models.CharField(max_length=100, blank=True)  
+    address     = models.TextField(blank=True, null=True)
 
     # Permanent slug (used in URLs and QR codes)
     slug = models.SlugField(unique=True, blank=True)
