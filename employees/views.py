@@ -19,8 +19,9 @@ class EmployeeDetailView(View):
             "region": emp.region,
             "phone": emp.phone,
             "email": emp.email,
+            "address": emp.address,
             "photo_url": emp.photo.url if emp.photo else None,
-            "qr_url": emp.qr_code.url if emp.qr_code else None,
+            "qr_url": emp.qr_code.url if emp.qr_code else None, 
             "profile_url": emp.public_profile_url(),
         }
         return JsonResponse(data, status=200)
