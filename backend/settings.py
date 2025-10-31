@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path('__file__').resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 # Quick-start development settings - unsuitable for production
@@ -139,8 +139,15 @@ REST_FRAMEWORK = {
     ),
 }
 # AWS S3 Configuration
-
-
+AWS_ACCESS_KEY_ID = 'AKIA23WHULL3IZHCCN4H'
+AWS_SECRET_ACCESS_KEY = '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'
+AWS_STORAGE_BUCKET_NAME = 'etomosphere-test-s3'
+AWS_S3_SIGNATURE_NAME = 's3v4'
+AWS_S3_REGION_NAME = 'us-east-1'
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
+AWS_S3_VERIFY = True
+AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 # Disable ACLs for S3 bucket compatibility
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
