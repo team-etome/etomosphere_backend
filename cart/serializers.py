@@ -5,7 +5,7 @@ from products.models import ProductVariant
 
 
 class CartItemSerializer(serializers.ModelSerializer):
-    product = ProductVariantSerializer(read_only=True)
+    product      = ProductVariantSerializer(read_only=True)
     total_price = serializers.ReadOnlyField()
     product_id = serializers.IntegerField(write_only=True)
     
