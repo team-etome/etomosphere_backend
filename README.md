@@ -107,3 +107,4 @@ The backend is configured with:
 2. Create serializers in `app1/serializers.py`
 3. Add viewsets in `app1/views.py`
 4. Update URL patterns in `app1/urls.py`
+# Auto-deploy test
