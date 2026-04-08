@@ -1,12 +1,14 @@
+# D:\ETMOSHPHERE\BACKEND\etomosphere_backend\orders\serializers.py
+
 from rest_framework import serializers
 from .models import Order, OrderItem
-from products.serializers import ProductVariantSerializer
+from products.serializers import VariantMiniSerializer  # ← was ProductVariantSerializer
 from accounts.serializers import UserSerializer
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    product = ProductVariantSerializer(read_only=True)
-    
+    product = VariantMiniSerializer(read_only=True)    # ← was ProductVariantSerializer
+
     class Meta:
         model = OrderItem
         fields = ('id', 'product', 'quantity', 'price')
@@ -14,12 +16,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
-    user = UserSerializer(read_only=True)
-    
+    user  = UserSerializer(read_only=True)
+
     class Meta:
         model = Order
-        fields = ('id', 'user', 'order_number', 'total_amount', 'status', 'payment_status',
-                 'shipping_address', 'billing_address', 'phone', 'items', 'created_at', 'updated_at')
-
-
-
+        fields = (
+            'id', 'user', 'order_number', 'total_amount', 'status', 'payment_status',
+            'shipping_address', 'billing_address', 'phone', 'items',
+            'created_at', 'updated_at'
+        )

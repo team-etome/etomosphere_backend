@@ -1,10 +1,12 @@
+# D:\ETMOSHPHERE\BACKEND\etomosphere_backend\cart\models.py
+
 from django.db import models
 from django.conf import settings
-from products.models import ProductVariant
+from products.models import Variant  # ← changed from ProductVariant
 
 
 class Cart(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
+    user       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -21,14 +23,15 @@ class Cart(models.Model):
 
 
 class CartItem(models.Model):
-    cart       = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
-    product    = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
-    quantity   = models.PositiveIntegerField(default=1)
-    added_at   = models.DateTimeField(auto_now_add=True)
+    cart     = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    product  = models.ForeignKey(Variant, on_delete=models.CASCADE)  # ← changed from ProductVariant
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.variant_name}"
+        return f"{self.quantity} x {self.product.name}"  # ← variant_name → name
 
     @property
     def total_price(self):
-        return self.product.price * self.quantity if self.product.price else 0
+        return self.product.current_price * self.quantity if self.product.current_price else 0
+        # ↑ uses current_price property (handles sale price automatically)

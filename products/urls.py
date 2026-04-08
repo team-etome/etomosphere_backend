@@ -19,4 +19,6 @@ urlpatterns = [
     path('products/', views.ListProducts.as_view(), name='products'),   # GET
     path('addproduct/', views.AddProduct.as_view(), name='add-product'),  # POST only
     path('enquiry/', views.Enquiry.as_view(), name='enquiry'),            # POST only
+
+    path('products/<int:product_id>/', views.ProductDetail.as_view(), name='product-detail'),
 ]

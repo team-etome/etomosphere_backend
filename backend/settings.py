@@ -19,6 +19,7 @@ SECRET_KEY = 'django-insecure-bnf69#fwc&p$rv2q2k3nu_t8ogm5di6zat!v(5ne3gv+@bh4+v
 # SECURITY WARNING: don't run with debug turned on in production!
 # CORS_ALLOW_ALL_ORIGINS = True
 # Application definition
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -70,11 +71,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'etomosphere',
-        'USER':'postgres',
-        'PASSWORD':'123',
-        'HOST':'localhost',
-        'port':'5432'
+        'NAME': 'etomosphere',                             # Your new RDS DB name
+        'USER': 'onboarding_admin',                        # RDS Master User
+        'PASSWORD': 'Onb0ard!ng2026#RDS',                  # RDS Password
+        'HOST': 'etome-db.c3y2sos0y0gz.ap-south-1.rds.amazonaws.com', 
+        'PORT': '5432',                                    # Note: Capitalize 'PORT'
     }
 }
 # Password validation
