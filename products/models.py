@@ -188,10 +188,17 @@ class Variant(TimeStampedModel):
         END_OF_LIFE  = 'end_of_life',  'End of Life'
 
     brand            = models.ForeignKey(
-                         Brand,
-                         on_delete=models.CASCADE,
-                         related_name="variants"
-                       )
+                     Brand,
+                     on_delete=models.CASCADE,
+                     related_name="variants"
+                   )
+    catalogue_product = models.ForeignKey(
+                     'CatalogueProduct',
+                     on_delete=models.CASCADE,
+                     related_name="variants",
+                     null=True, blank=True
+                   )
+    
     name             = models.CharField(max_length=200)          # "RP8603 65 inch"
     sku              = models.CharField(max_length=80, blank=True)
     mpn              = models.CharField(max_length=80, blank=True)

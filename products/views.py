@@ -316,163 +316,226 @@ class ListProducts(APIView):
 
 
 from django.shortcuts import get_object_or_404
-
-class ProductDetail(APIView):
+ 
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+ 
+from .models import CatalogueProduct, Variant
+class ProductDetailView(APIView):
     """
     GET /api/products/<id>/
-    GET /api/products/<id>/?type=variant   → look up by Variant id
-    GET /api/products/<id>/?type=product   → look up by CatalogueProduct id (default)
- 
-    Returns a rich detail object containing:
-      - Full catalogue product info
-      - All brands that sell this product
-      - All variants per brand (with images, specs, pricing)
-      - Category + Solution context
-      - Related products (same category, same solution)
+    GET /api/products/<id>/?type=variant   → resolve by Variant PK
+    GET /api/products/<id>/?type=product   → resolve by CatalogueProduct PK (default)
+
+    Returns a full product detail payload that matches what ProductDetail.jsx expects:
+    {
+        id, name, slug, description,
+        category: { id, name, slug, solution_name, solution_slug },
+        images: [ { id, image_url, is_main, alt_text } ],
+        brands: [
+            {
+                id, name, logo, website,
+                variants: [
+                    {
+                        id, name, sku, mpn, description,
+                        spec_json, price, sale_price, current_price,
+                        currency, is_on_sale, discount_percentage,
+                        stock_status, lifecycle_status, is_focused,
+                        images: [ { id, image_url, is_main, alt_text } ]
+                    }
+                ]
+            }
+        ],
+        price_summary: { min, max, currency } | null,
+        focused_variant_id: int | null,
+        related_products: [ { id, name, slug, image } ]
+    }
     """
+
     permission_classes = [AllowAny]
- 
+
     def get(self, request, product_id):
-        lookup_type = request.query_params.get('type', 'product')  # 'product' | 'variant'
- 
+        lookup_type = request.query_params.get('type', 'product')
+        focused_variant_id = None
+
         try:
-            # ── Resolve the CatalogueProduct regardless of what ID was passed ──
+            # ── 1. Resolve the CatalogueProduct ──────────────────────────────
             if lookup_type == 'variant':
                 variant = get_object_or_404(
-                    Variant.objects.select_related(
-                        'brand__products__category__solution'
-                    ).prefetch_related(
-                        'images',
-                        'brand__variants__images',
-                    ),
-                    pk=product_id
+                    Variant.objects.select_related('brand', 'catalogue_product'),
+                    pk=product_id,
                 )
-                # Get the catalogue product via brand → M2M products
-                catalogue_product = variant.brand.products.select_related(
-                    'category__solution'
-                ).prefetch_related(
-                    'images',
-                    'brands__variants__images',
-                ).first()
- 
-                if not catalogue_product:
-                    return Response({'error': 'No catalogue product found for this variant.'}, status=404)
- 
                 focused_variant_id = variant.id
- 
+
+                # Prefer the direct catalogue_product FK first (new approach)
+                if variant.catalogue_product:
+                    catalogue_product = (
+                        CatalogueProduct.objects
+                        .filter(pk=variant.catalogue_product_id)
+                        .select_related('category__solution')
+                        .prefetch_related('images', 'brands')
+                        .first()
+                    )
+                else:
+                    # Fallback: Brand → CatalogueProduct via M2M (old approach)
+                    catalogue_product = (
+                        CatalogueProduct.objects
+                        .filter(brands=variant.brand)
+                        .select_related('category__solution')
+                        .prefetch_related('images', 'brands')
+                        .first()
+                    )
+
+                if not catalogue_product:
+                    return Response(
+                        {'error': 'No catalogue product found for this variant.'},
+                        status=404,
+                    )
+
             else:
                 # Default: product_id IS a CatalogueProduct id
                 catalogue_product = get_object_or_404(
-                    CatalogueProduct.objects.select_related(
-                        'category__solution'
-                    ).prefetch_related(
-                        'images',
-                        'brands__variants__images',
-                    ),
-                    pk=product_id
+                    CatalogueProduct.objects
+                    .select_related('category__solution')
+                    .prefetch_related('images', 'brands'),
+                    pk=product_id,
                 )
-                focused_variant_id = None  # no specific variant focused
- 
-            # ── Build response ──────────────────────────────────────────────
+
+            # ── 2. Category + Solution ────────────────────────────────────────
             category = catalogue_product.category
             solution = category.solution if category else None
- 
-            # Brands + variants
+
+            # ── 3. Brands → Variants (scoped to THIS catalogue_product) ───────
             brands_data = []
             all_prices  = []
- 
-            for brand in catalogue_product.brands.all().prefetch_related('variants__images'):
+
+            for brand in catalogue_product.brands.all():
+
+                # KEY FIX: filter variants by BOTH brand AND catalogue_product
+                # This ensures Product A (Cybernetyx) and Product B (Cybernetyx)
+                # each show only their own variants, not all Cybernetyx variants.
+                brand_variants = Variant.objects.filter(
+                    brand=brand,
+                    catalogue_product=catalogue_product,
+                ).prefetch_related('images').order_by('sort_order', 'name')
+
+                # Fallback: if no variants are linked via catalogue_product FK yet
+                # (i.e. before migration data is filled), fall back to all brand variants.
+                # Remove this fallback once all fixtures are updated with catalogue_product.
+                brand_variants = Variant.objects.filter(
+    brand=brand,
+    catalogue_product=catalogue_product,
+).prefetch_related('images').order_by('sort_order', 'name')
+
+
                 variants_data = []
-                for v in brand.variants.all():
-                    price        = float(v.price)        if v.price        else None
-                    sale_price   = float(v.sale_price)   if v.sale_price   else None
+
+                for v in brand_variants:
+                    price         = float(v.price)         if v.price         else None
+                    sale_price    = float(v.sale_price)    if v.sale_price    else None
                     current_price = float(v.current_price) if v.current_price else None
- 
-                    if current_price:
+
+                    if current_price is not None:
                         all_prices.append(current_price)
- 
+
+                    # Variant images — build absolute URLs
+                    variant_images = []
+                    for img in v.images.all():
+                        try:
+                            url = request.build_absolute_uri(img.image.url) if img.image else None
+                        except Exception:
+                            url = None
+                        variant_images.append({
+                            'id':        img.id,
+                            'image_url': url,
+                            'is_main':   img.is_main,
+                            'alt_text':  img.alt_text,
+                        })
+
                     variants_data.append({
-                        'id':                 v.id,
-                        'name':               v.name,
-                        'sku':                v.sku,
-                        'mpn':                v.mpn,
-                        'description':        v.description,
-                        'spec_json':          v.spec_json or {},
-                        'price':              price,
-                        'sale_price':         sale_price,
-                        'current_price':      current_price,
-                        'currency':           v.currency,
-                        'is_on_sale':         v.is_on_sale,
+                        'id':                  v.id,
+                        'name':                v.name,
+                        'sku':                 v.sku,
+                        'mpn':                 v.mpn,
+                        'description':         v.description,
+                        'spec_json':           v.spec_json or {},
+                        'price':               price,
+                        'sale_price':          sale_price,
+                        'current_price':       current_price,
+                        'currency':            v.currency,
+                        'is_on_sale':          v.is_on_sale,
                         'discount_percentage': v.discount_percentage,
-                        'stock_status':       v.stock_status,
-                        'lifecycle_status':   v.lifecycle_status,
-                        'is_focused':         (v.id == focused_variant_id),
-                        'images': [
-                            {
-                                'id':        img.id,
-                                'image_url': img.image.url,
-                                'is_main':   img.is_main,
-                                'alt_text':  img.alt_text,
-                            }
-                            for img in v.images.all()
-                        ],
+                        'stock_status':        v.stock_status,
+                        'lifecycle_status':    v.lifecycle_status,
+                        'is_focused':          (v.id == focused_variant_id),
+                        'images':              variant_images,
                     })
- 
+
+                # Brand logo — absolute URL
+                try:
+                    logo_url = request.build_absolute_uri(brand.logo.url) if brand.logo else None
+                except Exception:
+                    logo_url = None
+
                 brands_data.append({
-                    'id':      brand.id,
-                    'name':    brand.name,
-                    'logo':    brand.logo.url if brand.logo else None,
-                    'website': brand.website,
+                    'id':       brand.id,
+                    'name':     brand.name,
+                    'logo':     logo_url,
+                    'website':  brand.website,
                     'variants': variants_data,
                 })
- 
-            # Product images
-            product_images = [
-                {
+
+            # ── 4. Product-level images ───────────────────────────────────────
+            product_images = []
+            for img in catalogue_product.images.all():
+                try:
+                    url = request.build_absolute_uri(img.image.url) if img.image else None
+                except Exception:
+                    url = None
+                product_images.append({
                     'id':        img.id,
-                    'image_url': img.image.url,
+                    'image_url': url,
                     'is_main':   img.is_main,
                     'alt_text':  img.alt_text,
-                }
-                for img in catalogue_product.images.all()
-            ]
- 
-            # Category images (fallback)
-            category_images = []
-            if category:
-                category_images = [
-                    {'image_url': img.image.url, 'is_main': img.is_main}
-                    for img in category.images.all()
-                ]
- 
-            # Price range summary
+                })
+
+            # ── 5. Price summary ──────────────────────────────────────────────
             price_summary = None
             if all_prices:
                 price_summary = {
-                    'min': min(all_prices),
-                    'max': max(all_prices),
+                    'min':      min(all_prices),
+                    'max':      max(all_prices),
                     'currency': 'INR',
                 }
- 
-            # Related products (same category, excluding self)
-            related_qs = CatalogueProduct.objects.filter(
-                category=category
-            ).exclude(
-                pk=catalogue_product.pk
-            ).prefetch_related('images')[:6]
- 
+
+            # ── 6. Related products (same category, excluding self) ────────────
+            related_qs = (
+                CatalogueProduct.objects
+                .filter(category=category)
+                .exclude(pk=catalogue_product.pk)
+                .prefetch_related('images')
+                [:6]
+            )
+
             related = []
             for rp in related_qs:
                 img = rp.images.filter(is_main=True).first() or rp.images.first()
+                try:
+                    img_url = request.build_absolute_uri(img.image.url) if img and img.image else None
+                except Exception:
+                    img_url = None
+
                 related.append({
                     'id':    rp.id,
                     'name':  rp.name,
                     'slug':  rp.slug,
-                    'image': img.image.url if img else None,
+                    'image': img_url,
                 })
- 
-            # Final response
-            data = {
+
+            # ── 7. Build final payload ────────────────────────────────────────
+            payload = {
                 'id':          catalogue_product.id,
                 'name':        catalogue_product.name,
                 'slug':        catalogue_product.slug,
@@ -480,7 +543,7 @@ class ProductDetail(APIView):
                 'sort_order':  catalogue_product.sort_order,
                 'created_at':  catalogue_product.created_at.isoformat(),
                 'updated_at':  catalogue_product.updated_at.isoformat(),
- 
+
                 'category': {
                     'id':            category.id,
                     'name':          category.name,
@@ -488,23 +551,25 @@ class ProductDetail(APIView):
                     'description':   category.description,
                     'solution_name': solution.name if solution else None,
                     'solution_slug': solution.slug if solution else None,
-                    'images':        category_images,
                 } if category else None,
- 
-                'images':        product_images,
-                'brands':        brands_data,
-                'price_summary': price_summary,
+
+                'images':             product_images,
+                'brands':             brands_data,
+                'price_summary':      price_summary,
                 'focused_variant_id': focused_variant_id,
                 'related_products':   related,
             }
- 
-            return Response(data, status=200)
- 
+
+            return Response(payload, status=200)
+
         except Exception as e:
             import traceback
-            print(f"❌ ProductDetail error: {e}")
             traceback.print_exc()
-            return Response({'error': 'Failed to retrieve product detail', 'details': str(e)}, status=500)
+            return Response(
+                {'error': 'Failed to retrieve product detail', 'details': str(e)},
+                status=500,
+            )
+ 
 
 
 

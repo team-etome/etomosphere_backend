@@ -69,13 +69,13 @@ class BrandAdmin(admin.ModelAdmin):
 
 @admin.register(Variant)
 class VariantAdmin(admin.ModelAdmin):
-    list_display    = ('name', 'brand', 'sku', 'stock_status', 'lifecycle_status', 'price', 'is_on_sale', 'currency', 'created_at')
-    list_filter     = ('brand', 'stock_status', 'lifecycle_status', 'is_on_sale', 'currency')
+    list_display    = ('name', 'brand', 'catalogue_product', 'sku', 'stock_status', 'lifecycle_status', 'price', 'is_on_sale', 'currency', 'created_at')
+    list_filter     = ('brand', 'catalogue_product', 'stock_status', 'lifecycle_status', 'is_on_sale', 'currency')
     search_fields   = ('name', 'sku', 'mpn')
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Basic Information', {
-            'fields': ('brand', 'name', 'sku', 'mpn', 'description', 'sort_order')
+            'fields': ('brand', 'catalogue_product', 'name', 'sku', 'mpn', 'description', 'sort_order')
         }),
         ('Pricing', {
             'fields': ('price', 'sale_price', 'cost_price', 'currency', 'is_on_sale')
