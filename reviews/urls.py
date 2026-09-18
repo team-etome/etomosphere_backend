@@ -10,7 +10,10 @@ urlpatterns = [
     path('api/products/<int:product_pk>/reviews/', views.ProductReviewListAPIView.as_view(), name='product-review-list'),
     path('api/reviews/<int:pk>/', views.ProductReviewDetailAPIView.as_view(), name='product-review-detail'),
     path('api/my-reviews/', views.UserReviewListAPIView.as_view(), name='user-review-list'),
-    
+
+    # Public reviews (submit + list approved)
+    path('public-reviews/', views.PublicReviewListView.as_view(), name='public-reviews'),
+
     # ViewSet URLs
     path('', include(router.urls)),
 ]

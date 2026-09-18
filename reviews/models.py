@@ -18,3 +18,19 @@ class ProductReview(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.product.name} ({self.rating} stars)"  # ← variant_name → name
+
+
+class PublicReview(models.Model):
+    name        = models.CharField(max_length=150)
+    school      = models.CharField(max_length=200, blank=True)
+    rating      = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment     = models.TextField()
+    is_approved = models.BooleanField(default=False)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        status = 'approved' if self.is_approved else 'pending'
+        return f"{self.name} ({self.rating}★) [{status}]"
