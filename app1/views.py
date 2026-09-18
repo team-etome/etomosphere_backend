@@ -84,7 +84,7 @@ def _send_contact_email(subject_tag, name, email, phone, message, extra_fields=N
 </table>
 </body></html>"""
 
-    team_msg = EmailMultiAlternatives(subject_tag, team_plain, from_email, [team_email])
+    team_msg = EmailMultiAlternatives(subject_tag, team_plain, from_email, team_email)
     team_msg.attach_alternative(team_html, 'text/html')
     team_msg.send(fail_silently=False)
 
