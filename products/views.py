@@ -6,10 +6,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 import json
 
+from django.db.models import Prefetch
+
+from app1.models import Solution
 from products.models import (
     Category, CategoryImage,
     CatalogueProduct, CatalogueProductImage,
@@ -20,6 +23,7 @@ from products.models import (
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 MAX_IMAGE_BYTES = 30 * 1024 * 1024  # 30MB
+
 
 
 def _str_to_bool(v):
@@ -236,79 +240,94 @@ class ListProducts(APIView):
 
     def get(self, request):
         try:
-            categories = Category.objects.select_related(
-                'solution'
-            ).prefetch_related(
-                'images',
-                'catalogue_products__brands__variants__images',
-                'catalogue_products__images',
-            ).all()
+            variant_qs = (
+                Variant.objects
+                .select_related('brand')
+                .prefetch_related('images')
+                .order_by('sort_order', 'name')
+            )
 
-            data = []
+            solutions = Solution.objects.prefetch_related(
+                'categories__images',
+                'categories__catalogue_products__images',
+                Prefetch('categories__catalogue_products__variants', queryset=variant_qs),
+            ).order_by('sort_order', 'name')
 
-            for category in categories:
-                category_data = {
-                    'id': category.id,
-                    'name': category.name,
-                    'slug': category.slug,
-                    'solution': category.solution.name if category.solution else None,
-                    'images': [
-                        {'image_url': img.image.url, 'is_main': img.is_main}
-                        for img in category.images.all()
-                    ],
-                    'products': []
+            solutions_data = []
+
+            for solution in solutions:
+                solution_data = {
+                    'id': solution.id,
+                    'name': solution.name,
+                    'slug': solution.slug,
+                    'sort_order': solution.sort_order,
+                    'categories': []
                 }
 
-                for product in category.catalogue_products.all():
-                    product_data = {
-                        'id': product.id,
-                        'name': product.name,
-                        'slug': product.slug,
-                        'description': product.description,
+                for category in solution.categories.all():
+                    category_data = {
+                        'id': category.id,
+                        'name': category.name,
+                        'slug': category.slug,
                         'images': [
-                            {'image_url': img.image.url, 'is_main': img.is_main, 'alt_text': img.alt_text}
-                            for img in product.images.all()
+                            {'image_url': img.image.url, 'is_main': img.is_main}
+                            for img in category.images.all()
                         ],
-                        'brands': []
+                        'products': []
                     }
 
-                    for brand in product.brands.all():
-                        brand_data = {
-                            'id': brand.id,
-                            'name': brand.name,
-                            'website': brand.website,
-                            'variants': []
-                        }
-
-                        for variant in brand.variants.all():
-                            brand_data['variants'].append({
-                                'id': variant.id,
-                                'name': variant.name,
-                                'sku': variant.sku,
-                                'mpn': variant.mpn,
-                                'description': variant.description,
-                                'spec_json': variant.spec_json,
-                                'price': str(variant.price) if variant.price else None,
-                                'sale_price': str(variant.sale_price) if variant.sale_price else None,
-                                'current_price': str(variant.current_price) if variant.current_price else None,
-                                'currency': variant.currency,
-                                'is_on_sale': variant.is_on_sale,
-                                'discount_percentage': variant.discount_percentage,
-                                'stock_status': variant.stock_status,
-                                'lifecycle_status': variant.lifecycle_status,
+                    for product in category.catalogue_products.all():
+                        # Group variants by brand (variants already filtered by catalogue_product via FK)
+                        brands_dict = {}
+                        for v in product.variants.all():
+                            bid = v.brand_id
+                            if bid not in brands_dict:
+                                brands_dict[bid] = {
+                                    'id': v.brand.id,
+                                    'name': v.brand.name,
+                                    'website': v.brand.website,
+                                    'variants': []
+                                }
+                            brands_dict[bid]['variants'].append({
+                                'id': v.id,
+                                'name': v.name,
+                                'sku': v.sku,
+                                'mpn': v.mpn,
+                                'description': v.description,
+                                'spec_json': v.spec_json,
+                                'price': str(v.price) if v.price else None,
+                                'sale_price': str(v.sale_price) if v.sale_price else None,
+                                'current_price': str(v.current_price) if v.current_price else None,
+                                'currency': v.currency,
+                                'is_on_sale': v.is_on_sale,
+                                'discount_percentage': v.discount_percentage,
+                                'stock_status': v.stock_status,
+                                'lifecycle_status': v.lifecycle_status,
                                 'images': [
                                     {'image_url': img.image.url, 'is_main': img.is_main}
-                                    for img in variant.images.all()
+                                    for img in v.images.all()
                                 ]
                             })
 
-                        product_data['brands'].append(brand_data)
+                        product_data = {
+                            'id': product.id,
+                            'name': product.name,
+                            'slug': product.slug,
+                            'description': product.description,
+                            'images': [
+                                {'image_url': img.image.url, 'is_main': img.is_main, 'alt_text': img.alt_text}
+                                for img in product.images.all()
+                            ],
+                            'brands': list(brands_dict.values())
+                        }
 
-                    category_data['products'].append(product_data)
+                        category_data['products'].append(product_data)
 
-                data.append(category_data)
+                    solution_data['categories'].append(category_data)
 
-            return Response({'count': len(data), 'categories': data}, status=200)
+                solutions_data.append(solution_data)
+
+            return Response({'count': len(solutions_data), 'solutions': solutions_data}, status=200)
 
         except Exception as e:
             print(f"❌ Error listing products: {str(e)}")
@@ -573,11 +592,6 @@ class ProductDetailView(APIView):
 
 
 
-
-# ──────────────────────────────────────────────────────────────
-# ENQUIRY
-# ──────────────────────────────────────────────────────────────
-
 class Enquiry(APIView):
     permission_classes = [AllowAny]
 
@@ -592,6 +606,7 @@ class Enquiry(APIView):
             email        = data.get('email', '').strip()
             location     = data.get('location', '').strip()
             comment      = data.get('comment', '').strip()
+            products     = data.get('products', [])
 
             missing_fields = [
                 field for field, value in {
@@ -608,41 +623,129 @@ class Enquiry(APIView):
             if '@' not in email:
                 return Response({'error': 'Invalid email format'}, status=status.HTTP_400_BAD_REQUEST)
 
-            subject = f"New Enquiry from {name} - {organisation}"
-            email_body = f"""
-New Enquiry Received
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@etomosphere.local")
+            team_email = getattr(settings, "ENQUIRY_RECEIVER_EMAIL", "info@etome.in")
 
-Contact Information:
---------------------
-Name:         {name}
-Organisation: {organisation}
-Designation:  {designation or 'Not provided'}
-Phone:        {phone}
-Email:        {email}
-Location:     {location or 'Not provided'}
+            # ── Plain-text fallbacks ──
+            products_text = (
+                "Products Enquired:\n------------------\n"
+                + "\n".join(f"  - {p}" for p in products)
+                + "\n\n"
+            ) if products else ""
 
-Message:
---------
-{comment or 'No comment provided'}
+            team_plain = (
+                f"New Enquiry\n\nName: {name}\nOrganisation: {organisation}\n"
+                f"Designation: {designation or '-'}\nPhone: {phone}\nEmail: {email}\n"
+                f"Location: {location or '-'}\n\n{products_text}Message:\n{comment or '-'}\n\n"
+                f"Submitted via etomosphere.com"
+            )
+            user_plain = (
+                f"Hello {name},\n\nThank you for reaching out to Etomosphere.\n"
+                f"Our team will review your enquiry and get back to you shortly.\n\n"
+                f"Best regards,\nEtomosphere Team"
+            )
 
----
-Submitted through the ETOMOSPHERE website.
-"""
+            # ── HTML — products section (only when cart has items) ──
+            if products:
+                product_rows = "".join(
+                    f'<tr><td style="padding:7px 14px;border-bottom:1px solid #f0f0f0;font-size:14px;color:#333;">&#8226; {p}</td></tr>'
+                    for p in products
+                )
+                products_html_block = f"""
+                <tr><td style="padding:20px 32px 0;">
+                  <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.8px;">Products Enquired</p>
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e8e8e8;border-radius:6px;overflow:hidden;">{product_rows}</table>
+                </td></tr>"""
+            else:
+                products_html_block = ""
+
+            # ── HTML — team notification email ──
+            team_html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f0;padding:32px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.1);">
+  <tr><td style="background:#ffffff;padding:26px 32px;border-bottom:2px solid #f0f0f0;">
+    <p style="margin:0;font-size:20px;font-weight:700;color:#0f0f23;letter-spacing:1.5px;">ETOMOSPHERE</p>
+    <p style="margin:4px 0 0;font-size:12px;color:#888;">New Enquiry Received</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px 0;">
+    <p style="margin:0 0 14px;font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.8px;">Contact Information</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-collapse:collapse;">
+      <tr style="background:#fafafa;"><td style="padding:8px 10px;color:#888;width:130px;font-weight:600;">Name</td><td style="padding:8px 10px;color:#222;">{name}</td></tr>
+      <tr><td style="padding:8px 10px;color:#888;font-weight:600;">Organisation</td><td style="padding:8px 10px;color:#222;">{organisation}</td></tr>
+      <tr style="background:#fafafa;"><td style="padding:8px 10px;color:#888;font-weight:600;">Designation</td><td style="padding:8px 10px;color:#222;">{designation or '—'}</td></tr>
+      <tr><td style="padding:8px 10px;color:#888;font-weight:600;">Phone</td><td style="padding:8px 10px;color:#222;">{phone}</td></tr>
+      <tr style="background:#fafafa;"><td style="padding:8px 10px;color:#888;font-weight:600;">Email</td><td style="padding:8px 10px;color:#222;">{email}</td></tr>
+      <tr><td style="padding:8px 10px;color:#888;font-weight:600;">Location</td><td style="padding:8px 10px;color:#222;">{location or '—'}</td></tr>
+    </table>
+  </td></tr>
+  {products_html_block}
+  <tr><td style="padding:20px 32px;">
+    <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.8px;">Message</p>
+    <p style="margin:0;padding:14px 16px;background:#f7f7f7;border-left:4px solid #0f0f23;border-radius:4px;font-size:14px;color:#444;line-height:1.6;">{comment or 'No message provided.'}</p>
+  </td></tr>
+  <tr><td style="background:#f5f5f5;padding:14px 32px;border-top:1px solid #eee;">
+    <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">Submitted via etomosphere.com</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+
+            # ── HTML — user confirmation email ──
+            user_html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f0;padding:40px 0;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.1);">
+  <tr><td style="background:#ffffff;padding:36px;text-align:center;border-bottom:2px solid #f0f0f0;">
+    <p style="margin:0;font-size:26px;font-weight:700;color:#0f0f23;letter-spacing:2px;">ETOMOSPHERE</p>
+    <p style="margin:4px 0 0;font-size:12px;color:#888;letter-spacing:.5px;">Enterprise Tech Solutions</p>
+  </td></tr>
+  <tr><td style="padding:44px 40px 36px;text-align:center;">
+    <table align="center" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr><td style="width:64px;height:64px;background:#e8f5e9;border-radius:50%;text-align:center;vertical-align:middle;font-size:30px;color:#2e7d32;">&#10003;</td></tr>
+    </table>
+    <h2 style="margin:0 0 12px;font-size:22px;color:#0f0f23;font-weight:700;">Thank You, {name}!</h2>
+    <p style="margin:0 0 8px;font-size:15px;color:#555;line-height:1.7;">We've received your enquiry successfully.</p>
+    <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.7;">Our team will review it and get back to you shortly.</p>
+    <p style="margin:0;font-size:13px;color:#999;">Meanwhile, explore our solutions at<br>
+      <a href="https://etomosphere.com" style="color:#0f0f23;font-weight:700;text-decoration:none;">etomosphere.com</a>
+    </p>
+  </td></tr>
+  <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #f0f0f0;margin:0;"></td></tr>
+  <tr><td style="padding:24px 40px;text-align:center;">
+    <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#0f0f23;">Etomosphere Team</p>
+    <p style="margin:0;font-size:12px;color:#bbb;">info@etome.in &nbsp;|&nbsp; etomosphere.com</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+
+            # ── Send both emails ──
             try:
-                send_mail(
-                    subject=subject,
-                    message=email_body,
-                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@etomosphere.local"),
-                    recipient_list=[getattr(settings, "ENQUIRY_RECEIVER_EMAIL", "development@resoluteindia.co.in")],
-                    fail_silently=False,
+                team_msg = EmailMultiAlternatives(
+                    subject=f"New Enquiry from {name} - {organisation}",
+                    body=team_plain,
+                    from_email=from_email,
+                    to=[team_email],
                 )
-                send_mail(
-                    subject="Thank you for contacting ETOMOSPHERE",
-                    message=f"Hello {name},\n\nThank you for reaching out. Our team will contact you soon.\n\nBest regards,\nETOMOSPHERE Team",
-                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@etomosphere.local"),
-                    recipient_list=[email],
-                    fail_silently=False,
+                team_msg.attach_alternative(team_html, "text/html")
+                team_msg.send(fail_silently=False)
+
+                user_msg = EmailMultiAlternatives(
+                    subject="Thank you for contacting Etomosphere",
+                    body=user_plain,
+                    from_email=from_email,
+                    to=[email],
                 )
+                user_msg.attach_alternative(user_html, "text/html")
+                user_msg.send(fail_silently=False)
+
             except Exception as e:
                 print(f"❌ Email Error: {str(e)}")
 
