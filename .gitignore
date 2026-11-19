@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# Environment
+env/
+venv/
+.env
+.env.*
+
+# Data dumps & scripts
+*.json
+dump.py
+
+# Static/media assets committed by mistake
+products/*.png
+products/*.jpg
+products/*.jpeg
+products/*.gif
+products/*.webp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
