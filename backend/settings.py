@@ -11,7 +11,7 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['192.168.43.86', 'localhost', '127.0.0.13','192.168.1.20','192.168.1.8', '.trycloudflare.com']
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'reviews',
     'app1',
     'employees',
+    'oem',
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -68,14 +69,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'etomosphere',                             # Your new RDS DB name
-        'USER': 'onboarding_admin',                        # RDS Master User
-        'PASSWORD': 'Onb0ard!ng2026#RDS',                  # RDS Password
-        'HOST': 'etome-db.c3y2sos0y0gz.ap-south-1.rds.amazonaws.com', 
-        'PORT': '5432',                                    # Note: Capitalize 'PORT'
+        'NAME': 'etomosphere_one',
+        'USER':'postgres',
+        'PASSWORD':'123',
+        'HOST':'localhost',
+        'port':'5432'
     }
 }
 # Password validation
@@ -113,6 +115,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.God'
 # CORS settings for frontend connectivity
+
+
 CORS_ALLOWED_ORIGINS = [
     "https://etomosphere.com",
     "https://www.etomosphere.com",
@@ -120,6 +124,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.1.36:5173",
+    "http://192.168.43.86:5173",  
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True  # Only for development
@@ -134,7 +141,10 @@ CSRF_TRUSTED_ORIGINS = [
     "http://192.168.1.68:3000",
     "http://192.168.1.68:5173",
     "https://etomosphere.com",
-    "https://www.etomosphere.com"
+    "https://www.etomosphere.com",
+    "http://192.168.43.86:5173",
+    "https://dense-namespace-modelling-boxes.trycloudflare.com",
+    "https://trunk-proceed-supplier-helmet.trycloudflare.com",
 ]
 # REST Framework settings
 REST_FRAMEWORK = {
