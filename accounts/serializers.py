@@ -1,7 +1,8 @@
+from django.db.models import Q
 from rest_framework import serializers
-from accounts.models import *
+from accounts.models import User
 from django.contrib.auth.hashers import make_password
-
+from backend import constants as const
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -23,10 +24,10 @@ class LoginSerializer(serializers.Serializer):
         ).first()
 
         if not user or not user.check_password(password):
-            raise serializers.ValidationError("Invalid credentials.")
+            raise serializers.ValidationError(const.INVALID_CREDENTIALS)
 
         if not user.is_active:
-            raise serializers.ValidationError("User account is disabled.")
+            raise serializers.ValidationError(const.USER_ACCOUNT_INACTIVE)
 
         attrs["user"] = user
         return attrs

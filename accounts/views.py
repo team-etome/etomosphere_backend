@@ -74,7 +74,7 @@ class LoginAPIView(APIView):
             if not serializer.is_valid():
                 return Response(error_(message=const.VALIDATION_FAILED, data=serializer.errors),
                                 status=status.HTTP_400_BAD_REQUEST)
-            user = serializer.validated_data["tokens"]
+            user = serializer.validated_data["user"]
             refresh = RefreshToken.for_user(user)
 
             return Response(success_(message=const.LOGIN_SUCCESS,
