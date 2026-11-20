@@ -1,11 +1,12 @@
 from django.urls import path
-from accounts import views
+
+from accounts.views import LoginAPIView, RegisterView
 
 
 
 urlpatterns = [
    
-    path('api/register/', views.RegisterView.as_view(), name='user-register'),
-    path('api/login/', views.LoginView.as_view(), name='user-login'),
+    path('api/register/', RegisterView.as_view(), name='user-register'),
+    path('login/', LoginAPIView.as_view(), name='user-login'),
 
 ]

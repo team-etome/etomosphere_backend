@@ -19,21 +19,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-# urlpatterns = [
-#     path('admin/', admin.site.urls),
-#     path('', include('accounts.urls')),
-#     path('', include('products.urls')),
-#     path('', include('cart.urls')),
-#     path('', include('orders.urls')),
-#     path('', include('reviews.urls')),
-#     path('', include('app1.urls')),
-#     path('', include('employees.urls')),
-# ]
-
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    path('api/', include('accounts.urls')),
+    path('api/v1/accounts/', include('accounts.urls')),
     path('api/', include('products.urls')),
     path('api/', include('cart.urls')),
     path('api/', include('orders.urls')),
