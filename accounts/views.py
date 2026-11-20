@@ -101,10 +101,7 @@ class RegisterAPIView(APIView):
                     error_(message=const.VALIDATION_FAILED, data=serializer.errors),
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
-            user = serializer.save()
-            refresh = RefreshToken.for_user(user)
-
+            serializer.save()
             return Response(
                 success_(
                     message=const.REGISTER_SUCCESS,
