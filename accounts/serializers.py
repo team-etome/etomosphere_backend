@@ -31,3 +31,47 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user
         return attrs
+
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
+    phone = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=16
+    )
+    password = serializers.CharField(
+        required=True, write_only=True
+    )
+
+    def validate_email(self, value):
+        value = (value or "").strip().lower()
+        if not value:
+            return None
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError(const.EMAIL_ALREADY_EXISTS)
+        return value
+
+    def validate_phone(self, value):
+        value = (value or "").strip()
+        if not value:
+            return None
+        if User.objects.filter(phone=value).exists():
+            raise serializers.ValidationError(const.PHONE_ALREADY_EXISTS)
+        return value
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        phone = attrs.get("phone")
+
+        if not email and not phone:
+            raise serializers.ValidationError(const.EMAIL_OR_PHONE_REQUIRED)
+
+        attrs["email"] = email
+        attrs["phone"] = phone
+        return attrs
+
+    def create(self, validated_data):
+        return User.objects.create_user(
+                email=validated_data["email"],
+                phone=validated_data["phone"],
+                password=validated_data["password"],
+            )
+    

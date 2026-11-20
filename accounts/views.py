@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import *
-from accounts.serializers import LoginSerializer
+from accounts.serializers import LoginSerializer, RegisterSerializer
 from backend.response import success_, error_
 from backend import constants as const
 
@@ -89,4 +89,29 @@ class LoginAPIView(APIView):
                 }),status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_(message=str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RegisterAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = RegisterSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    error_(message=const.VALIDATION_FAILED, data=serializer.errors),
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+
+            return Response(
+                success_(
+                    message=const.REGISTER_SUCCESS,
+                ),
+                status=status.HTTP_201_CREATED,
+            )
+        except Exception as e:
+            return Response(error_(message=str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         
